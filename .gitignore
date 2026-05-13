@@ -2,3 +2,4 @@ day1.py
 *.pdf
 __pycache__/
 .env
+frontend/node_modules/
