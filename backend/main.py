@@ -147,7 +147,7 @@ async def ask_question(data: dict):
 
     for chunk_text, embedding_json in rows:
 
-        chunk_embedding = np.array(json.loads(embedding_json))
+        chunk_embedding = np.array(embedding_json)
 
         similarity = np.dot(question_embedding, chunk_embedding) / (
             np.linalg.norm(question_embedding) *
