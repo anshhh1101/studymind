@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from google import genai
+import google.generativeai as genai
 import psycopg2
 import json
 import numpy as np
