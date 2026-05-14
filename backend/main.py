@@ -96,7 +96,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     for chunk in chunks:
 
         result = client.models.embed_content(
-            model="models/gemini-embedding-001",
+            model="gemini-embedding-001",
             contents=chunk
         )
 
@@ -125,7 +125,7 @@ async def ask_question(data: dict):
 
     # Create embedding for question
     result = client.models.embed_content(
-        model="models/gemini-embedding-001",
+        model="gemini-embedding-001",
         contents=question
     )
 
@@ -174,8 +174,8 @@ Answer clearly and concisely.
 """
 
     response = client.models.generate_content(
-    model="gemini-1.5-flash",
-    contents=prompt
+        model="gemini-1.5-flash",
+        contents=prompt
     )
 
     return {
