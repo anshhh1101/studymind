@@ -26,7 +26,6 @@ export default function App() {
     formData.append("file", file);
     try {
       const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
-      const data = await res.json();
       setMessages(prev => [...prev, { role: "bot", text: `✅ "${file.name}" uploaded! Ask me anything about it.` }]);
     } catch {
       setMessages(prev => [...prev, { role: "bot", text: "❌ Upload failed. Is the backend running?" }]);
