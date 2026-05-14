@@ -6,3 +6,4 @@ pypdf
 python-dotenv
 psycopg2-binary
 numpy
+pdfplumber
