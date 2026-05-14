@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-import google.generativeai as genai
+from google import genai
 import psycopg2
 import json
 import numpy as np
@@ -26,11 +26,8 @@ app.add_middleware(
 GEMINI_KEY = os.getenv("GEMINI_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Configure Gemini
-genai.configure(api_key=GEMINI_KEY)
-
-# Gemini models
-chat_model = genai.GenerativeModel("gemini-1.5-flash")
+# Gemini Client
+client = genai.Client(api_key=GEMINI_KEY)
 
 # PostgreSQL connection
 def get_db():
@@ -93,13 +90,12 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     for chunk in chunks:
 
-        result = genai.embed_content(
-            model="models/embedding-001",
-            content=chunk,
-            task_type="retrieval_document"
+        result = client.models.embed_content(
+            model="text-embedding-004",
+            contents=chunk
         )
 
-        embedding = result["embedding"]
+        embedding = result.embeddings[0].values
 
         cur.execute(
             "INSERT INTO documents (chunk_text, embedding) VALUES (%s, %s)",
@@ -121,13 +117,12 @@ async def ask_question(data: dict):
     question = data["question"]
 
     # Create question embedding
-    result = genai.embed_content(
-        model="models/embedding-001",
-        content=question,
-        task_type="retrieval_query"
+    result = client.models.embed_content(
+        model="text-embedding-004",
+        contents=question
     )
 
-    question_embedding = np.array(result["embedding"])
+    question_embedding = np.array(result.embeddings[0].values)
 
     # Fetch stored chunks
     conn = get_db()
@@ -171,7 +166,10 @@ Question:
 Answer clearly and concisely.
 """
 
-    response = chat_model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=prompt
+    )
 
     return {
         "answer": response.text
