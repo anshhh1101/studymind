@@ -4,19 +4,27 @@ An AI-powered RAG (Retrieval Augmented Generation) teaching assistant that lets 
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.136-green)
+![React](https://img.shields.io/badge/React-18-61DAFB)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue)
 ![Gemini](https://img.shields.io/badge/Gemini_API-2.0-orange)
+![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.0-38BDF8)
 
 ---
 
 ## 🚀 What it does
 
-Upload any PDF — lecture notes, textbooks, research papers — and ask questions about it in plain English. StudyMind finds the most relevant sections and gives you a clear, accurate answer.
+Upload any PDF — lecture notes, textbooks, research papers — and ask questions about it in plain English. StudyMind finds the most relevant sections and gives you a clear, accurate answer drawn directly from your document.
 
 **Example:**
 - Upload your Data Science notes
 - Ask "What is the difference between supervised and unsupervised learning?"
 - Get a precise answer drawn directly from your notes
+
+---
+
+## 🖥️ Preview
+
+> Dark glassmorphism UI with animated background, chat bubbles, PDF upload, and real-time AI answers.
 
 ---
 
@@ -39,7 +47,7 @@ Most relevant chunk found via cosine similarity
 ↓
 Chunk + question sent to Gemini LLM
 ↓
-Clear answer returned to user
+Clear answer returned to chat UI
 
 ---
 
@@ -47,7 +55,7 @@ Clear answer returned to user
 
 | Layer | Technology |
 |---|---|
-| Frontend | HTML, CSS, JavaScript |
+| Frontend | React.js, Tailwind CSS, Glassmorphism UI |
 | Backend | Python, FastAPI |
 | Database | PostgreSQL |
 | AI Embeddings | Google Gemini API (gemini-embedding-001) |
@@ -65,7 +73,7 @@ git clone https://github.com/anshhh1101/studymind.git
 cd studymind
 ```
 
-### 2. Install dependencies
+### 2. Install backend dependencies
 ```bash
 pip install fastapi uvicorn python-multipart pdfplumber psycopg2-binary google-genai numpy python-dotenv
 ```
@@ -91,17 +99,30 @@ DB_PASSWORD=your-postgresql-password
 uvicorn main:app --reload
 ```
 
-### 6. Open the frontend
-Open `index.html` with Live Server or drag it into your browser.
+### 6. Run the frontend
+```bash
+cd frontend
+npm install
+npm start
+```
+
+### 7. Open in browser
+Go to **http://localhost:3000**
 
 ---
 
 ## 📁 Project Structure
 studymind/
-├── main.py          # FastAPI backend (upload + ask endpoints)
-├── index.html       # Frontend chat UI
-├── .env             # API keys (not committed)
-├── .gitignore       # Ignores .env, PDFs, cache
+├── main.py              # FastAPI backend (upload + ask endpoints)
+├── frontend/
+│   ├── src/
+│   │   ├── App.js       # React frontend with Tailwind UI
+│   │   └── index.css    # Tailwind directives
+│   ├── package.json
+│   └── tailwind.config.js
+├── index.html           # Original HTML version
+├── .env                 # API keys (not committed)
+├── .gitignore
 └── README.md
 
 ---
@@ -118,13 +139,13 @@ studymind/
 
 ## 🔮 Future Improvements
 
-- [ ] Support multiple PDFs simultaneously
 - [ ] Replace cosine similarity with pgvector for faster search
-- [ ] Add chat history / memory
+- [ ] Support multiple PDFs simultaneously
+- [ ] Add chat history and memory
 - [ ] Auto-generate quiz from uploaded notes
-- [ ] React + Next.js frontend
-- [ ] Deploy to AWS (S3 + Lambda + RDS)
 - [ ] User authentication with JWT
+- [ ] Deploy to AWS (S3 + Lambda + RDS)
+- [ ] Next.js migration for SSR
 
 ---
 
