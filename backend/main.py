@@ -31,7 +31,7 @@ genai.configure(api_key=GEMINI_KEY)
 
 # Gemini models
 chat_model = genai.GenerativeModel("gemini-1.5-flash")
-embedding_model = "models/embedding-001"
+embedding_model = "models/text-embedding-004"
 
 # PostgreSQL connection
 def get_db():
