@@ -14,10 +14,11 @@ load_dotenv()
 
 app = FastAPI()
 
-# Allow frontend to connect
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -33,7 +34,7 @@ client = genai.Client(api_key=GEMINI_KEY)
 def get_db():
     return psycopg2.connect(DATABASE_URL)
 
-# Initialize database table
+# Initialize database
 def init_db():
     conn = get_db()
     cur = conn.cursor()
@@ -52,11 +53,13 @@ def init_db():
 
 init_db()
 
-# Route 1 - Upload PDF
+# -----------------------------
+# ROUTE 1 - Upload PDF
+# -----------------------------
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
 
-    # Save uploaded PDF temporarily
+    # Save uploaded file temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
@@ -71,9 +74,10 @@ async def upload_pdf(file: UploadFile = File(...)):
             if text:
                 full_text += text + "\n"
 
+    # Delete temp file
     os.unlink(tmp_path)
 
-    # Split text into chunks
+    # Split into chunks
     words = full_text.split()
     chunk_size = 500
     chunks = []
@@ -82,10 +86,11 @@ async def upload_pdf(file: UploadFile = File(...)):
         chunk = " ".join(words[i:i + chunk_size])
         chunks.append(chunk)
 
-    # Store embeddings in database
+    # Store embeddings
     conn = get_db()
     cur = conn.cursor()
 
+    # Clear old data
     cur.execute("DELETE FROM documents")
 
     for chunk in chunks:
@@ -107,18 +112,20 @@ async def upload_pdf(file: UploadFile = File(...)):
     conn.close()
 
     return {
-        "message": f"PDF uploaded and processed. {len(chunks)} chunks stored."
+        "message": f"PDF uploaded successfully. {len(chunks)} chunks stored."
     }
 
-# Route 2 - Ask Question
+# -----------------------------
+# ROUTE 2 - Ask Question
+# -----------------------------
 @app.post("/ask")
 async def ask_question(data: dict):
 
     question = data["question"]
 
-    # Create question embedding
+    # Create embedding for question
     result = client.models.embed_content(
-        model="gemini-embedding-001"
+        model="gemini-embedding-001",
         contents=question
     )
 
@@ -134,7 +141,7 @@ async def ask_question(data: dict):
     cur.close()
     conn.close()
 
-    # Find most similar chunk
+    # Find best matching chunk
     best_score = -1
     best_chunk = ""
 
@@ -155,7 +162,7 @@ async def ask_question(data: dict):
     prompt = f"""
 You are a helpful teaching assistant.
 
-Answer the question based only on the context below.
+Answer the question based ONLY on the context below.
 
 Context:
 {best_chunk}
@@ -167,7 +174,7 @@ Answer clearly and concisely.
 """
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
+        model="gemini-2.0-flash",
         contents=prompt
     )
 
@@ -175,7 +182,9 @@ Answer clearly and concisely.
         "answer": response.text
     }
 
-# Route 3 - Health Check
+# -----------------------------
+# ROUTE 3 - Health Check
+# -----------------------------
 @app.get("/")
 def root():
     return {
