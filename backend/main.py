@@ -31,7 +31,6 @@ genai.configure(api_key=GEMINI_KEY)
 
 # Gemini models
 chat_model = genai.GenerativeModel("gemini-1.5-flash")
-embedding_model = "models/text-embedding-004"
 
 # PostgreSQL connection
 def get_db():
@@ -95,8 +94,9 @@ async def upload_pdf(file: UploadFile = File(...)):
     for chunk in chunks:
 
         result = genai.embed_content(
-            model=embedding_model,
-            content=chunk
+            model="models/embedding-001",
+            content=chunk,
+            task_type="retrieval_document"
         )
 
         embedding = result["embedding"]
@@ -122,8 +122,9 @@ async def ask_question(data: dict):
 
     # Create question embedding
     result = genai.embed_content(
-        model=embedding_model,
-        content=question
+        model="models/embedding-001",
+        content=question,
+        task_type="retrieval_query"
     )
 
     question_embedding = np.array(result["embedding"])
