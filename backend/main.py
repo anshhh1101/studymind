@@ -7,6 +7,10 @@ import numpy as np
 import pdfplumber
 import tempfile
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI()
 
@@ -18,13 +22,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Your credentials
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
+# Environment variables
 GEMINI_KEY = os.getenv("GEMINI_KEY")
+
+# Configure Gemini
+genai.configure(api_key=GEMINI_KEY)
+
+# Gemini models
+chat_model = genai.GenerativeModel("gemini-1.5-flash")
+embedding_model = "models/embedding-001"
+
+# PostgreSQL config
 DB_CONFIG = {
     "host": "localhost",
     "port": 5050,
@@ -33,106 +41,132 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD")
 }
 
-client = genai.Client(api_key=GEMINI_KEY)
-
 def get_db():
     return psycopg2.connect(**DB_CONFIG)
 
 # Route 1 - Upload PDF
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
-    # Save uploaded file temporarily
+
+    # Save uploaded PDF temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
 
-    # Extract text
+    # Extract text from PDF
     full_text = ""
+
     with pdfplumber.open(tmp_path) as pdf:
         for page in pdf.pages:
             text = page.extract_text()
+
             if text:
                 full_text += text + "\n"
+
     os.unlink(tmp_path)
 
-    # Split into chunks
+    # Split text into chunks
     words = full_text.split()
     chunk_size = 500
     chunks = []
+
     for i in range(0, len(words), chunk_size):
         chunk = " ".join(words[i:i + chunk_size])
         chunks.append(chunk)
 
-    # Store in database
+    # Store embeddings in database
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM documents")  # Clear old documents
+
+    cur.execute("DELETE FROM documents")
+
     for chunk in chunks:
-        result = client.models.embed_content(
-            model="models/gemini-embedding-001",
-            contents=chunk
+
+        result = genai.embed_content(
+            model=embedding_model,
+            content=chunk
         )
-        embedding = result.embeddings[0].values
+
+        embedding = result["embedding"]
+
         cur.execute(
             "INSERT INTO documents (chunk_text, embedding) VALUES (%s, %s)",
             (chunk, json.dumps(embedding))
         )
+
     conn.commit()
     cur.close()
     conn.close()
 
-    return {"message": f"PDF uploaded and processed. {len(chunks)} chunks stored."}
+    return {
+        "message": f"PDF uploaded and processed. {len(chunks)} chunks stored."
+    }
 
-# Route 2 - Ask a question
+# Route 2 - Ask Question
 @app.post("/ask")
 async def ask_question(data: dict):
+
     question = data["question"]
 
-    # Embed the question
-    result = client.models.embed_content(
-        model="models/gemini-embedding-001",
-        contents=question
+    # Create question embedding
+    result = genai.embed_content(
+        model=embedding_model,
+        content=question
     )
-    question_embedding = np.array(result.embeddings[0].values)
 
-    # Find most relevant chunk
+    question_embedding = np.array(result["embedding"])
+
+    # Fetch stored chunks
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute("SELECT chunk_text, embedding FROM documents")
     rows = cur.fetchall()
+
     cur.close()
     conn.close()
 
+    # Find most similar chunk
     best_score = -1
     best_chunk = ""
+
     for chunk_text, embedding_json in rows:
-        chunk_embedding = np.array(embedding_json)
+
+        chunk_embedding = np.array(json.loads(embedding_json))
+
         similarity = np.dot(question_embedding, chunk_embedding) / (
-            np.linalg.norm(question_embedding) * np.linalg.norm(chunk_embedding)
+            np.linalg.norm(question_embedding) *
+            np.linalg.norm(chunk_embedding)
         )
+
         if similarity > best_score:
             best_score = similarity
             best_chunk = chunk_text
 
-    # Get answer from Gemini
-    prompt = f"""You are a helpful teaching assistant.
+    # Prompt Gemini
+    prompt = f"""
+You are a helpful teaching assistant.
+
 Answer the question based only on the context below.
 
 Context:
 {best_chunk}
 
-Question: {question}
+Question:
+{question}
 
-Answer clearly and concisely."""
+Answer clearly and concisely.
+"""
 
-    response = client.models.generate_content(
-        model="models/gemini-2.5-flash-lite",
-        contents=prompt
-    )
+    response = chat_model.generate_content(prompt)
 
-    return {"answer": response.text}
+    return {
+        "answer": response.text
+    }
 
-# Route 3 - Health check
+# Route 3 - Health Check
 @app.get("/")
 def root():
-    return {"status": "StudyMind API is running"}
+    return {
+        "status": "StudyMind API is running"
+    }
