@@ -91,7 +91,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     for chunk in chunks:
 
         result = client.models.embed_content(
-            model="gemini-embedding-001"
+            model="gemini-embedding-001",
             contents=chunk
         )
 
