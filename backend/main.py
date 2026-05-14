@@ -24,6 +24,7 @@ app.add_middleware(
 
 # Environment variables
 GEMINI_KEY = os.getenv("GEMINI_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_KEY)
@@ -32,17 +33,28 @@ genai.configure(api_key=GEMINI_KEY)
 chat_model = genai.GenerativeModel("gemini-1.5-flash")
 embedding_model = "models/embedding-001"
 
-# PostgreSQL config
-DB_CONFIG = {
-    "host": "localhost",
-    "port": 5050,
-    "database": "studymind",
-    "user": "postgres",
-    "password": os.getenv("DB_PASSWORD")
-}
-
+# PostgreSQL connection
 def get_db():
-    return psycopg2.connect(**DB_CONFIG)
+    return psycopg2.connect(DATABASE_URL)
+
+# Initialize database table
+def init_db():
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS documents (
+            id SERIAL PRIMARY KEY,
+            chunk_text TEXT,
+            embedding JSONB
+        )
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+init_db()
 
 # Route 1 - Upload PDF
 @app.post("/upload")
