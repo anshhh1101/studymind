@@ -29,7 +29,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 groq_client = Groq(api_key=GROQ_KEY)
 
-HF_EMBED_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
+HF_EMBED_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
 HF_HEADERS = {"Authorization": f"Bearer {HF_KEY}"}
 
 def get_embedding(text: str):
