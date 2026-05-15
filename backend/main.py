@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import psycopg2
 import json
 import numpy as np
@@ -9,12 +10,10 @@ import tempfile
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 app = FastAPI()
 
-# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,18 +22,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Environment variables
 GEMINI_KEY = os.getenv("GEMINI_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Gemini setup
-genai.configure(api_key=GEMINI_KEY)
+client = genai.Client(api_key=GEMINI_KEY)
 
-# PostgreSQL connection
 def get_db():
     return psycopg2.connect(DATABASE_URL)
 
-# Initialize database
 def init_db():
     conn = get_db()
     cur = conn.cursor()
@@ -71,7 +66,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     os.unlink(tmp_path)
 
     if not full_text.strip():
-        return {"message": "Could not extract text from PDF. Make sure it is not a scanned image."}
+        return {"message": "Could not extract text from PDF."}
 
     words = full_text.split()
     chunk_size = 500
@@ -82,12 +77,12 @@ async def upload_pdf(file: UploadFile = File(...)):
     cur.execute("DELETE FROM documents")
 
     for chunk in chunks:
-        result = genai.embed_content(
-            model="models/embedding-001",
-            content=chunk,
-            task_type="retrieval_document"
+        result = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=chunk,
+            config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
         )
-        embedding = result["embedding"]
+        embedding = result.embeddings[0].values
 
         cur.execute(
             "INSERT INTO documents (chunk_text, embedding) VALUES (%s, %s)",
@@ -108,16 +103,15 @@ async def upload_pdf(file: UploadFile = File(...)):
 async def ask_question(data: dict):
 
     question = data.get("question", "").strip()
-
     if not question:
         return {"answer": "Please ask a valid question."}
 
-    result = genai.embed_content(
-        model="models/embedding-001",
-        content=question,
-        task_type="retrieval_query"
+    result = client.models.embed_content(
+        model="gemini-embedding-001",
+        contents=question,
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
     )
-    question_embedding = np.array(result["embedding"])
+    question_embedding = np.array(result.embeddings[0].values)
 
     conn = get_db()
     cur = conn.cursor()
@@ -133,7 +127,6 @@ async def ask_question(data: dict):
     best_chunk = ""
 
     for chunk_text, embedding_json in rows:
-        # safely handle both string and list from psycopg2
         if isinstance(embedding_json, str):
             embedding_json = json.loads(embedding_json)
         chunk_embedding = np.array(embedding_json)
@@ -158,8 +151,10 @@ Question:
 
 Answer clearly and concisely."""
 
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
 
     return {"answer": response.text}
 
