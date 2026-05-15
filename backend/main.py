@@ -29,7 +29,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 groq_client = Groq(api_key=GROQ_KEY)
 
-HF_EMBED_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
+HF_EMBED_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
 HF_HEADERS = {"Authorization": f"Bearer {HF_KEY}"}
 
 def get_embedding(text: str):
@@ -43,12 +43,14 @@ def get_embedding(text: str):
                 timeout=60
             )
 
-            if not response.text.strip():
-                time.sleep(10)
+            print(f"HF attempt {attempt+1}: status={response.status_code}, body={response.text[:200]}")
+
+            if response.status_code in [503, 500]:
+                time.sleep(15)
                 continue
 
-            if response.status_code == 503:
-                time.sleep(10)
+            if not response.text.strip():
+                time.sleep(15)
                 continue
 
             result = response.json()
@@ -61,8 +63,9 @@ def get_embedding(text: str):
 
             time.sleep(5)
 
-        except Exception:
-            time.sleep(10)
+        except Exception as e:
+            print(f"HF exception attempt {attempt+1}: {e}")
+            time.sleep(15)
             continue
 
     raise ValueError("HuggingFace model failed to respond after retries")
