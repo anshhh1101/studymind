@@ -6,9 +6,9 @@ import numpy as np
 import pdfplumber
 import tempfile
 import os
-import requests
 import time
 from groq import Groq
+from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,47 +28,23 @@ GROQ_KEY = os.getenv("GROQ_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 groq_client = Groq(api_key=GROQ_KEY)
-
-HF_EMBED_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
-HF_HEADERS = {"Authorization": f"Bearer {HF_KEY}"}
+hf_client = InferenceClient(token=HF_KEY)
 
 def get_embedding(text: str):
-    max_retries = 5
+    max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = requests.post(
-                HF_EMBED_URL,
-                headers=HF_HEADERS,
-                json={"inputs": text, "options": {"wait_for_model": True}},
-                timeout=60
+            result = hf_client.feature_extraction(
+                text,
+                model="sentence-transformers/all-MiniLM-L6-v2"
             )
-
-            print(f"HF attempt {attempt+1}: status={response.status_code}, body={response.text[:200]}")
-
-            if response.status_code in [503, 500]:
-                time.sleep(15)
-                continue
-
-            if not response.text.strip():
-                time.sleep(15)
-                continue
-
-            result = response.json()
-
-            if isinstance(result, list) and len(result) > 0:
-                if isinstance(result[0], float):
-                    return result
-                if isinstance(result[0], list) and len(result[0]) > 0:
-                    return result[0]
-
-            time.sleep(5)
-
+            embedding = np.array(result).flatten().tolist()
+            print(f"Embedding success: {len(embedding)} dims")
+            return embedding
         except Exception as e:
-            print(f"HF exception attempt {attempt+1}: {e}")
-            time.sleep(15)
-            continue
-
-    raise ValueError("HuggingFace model failed to respond after retries")
+            print(f"Embedding attempt {attempt+1} failed: {e}")
+            time.sleep(10)
+    raise ValueError("Embedding failed after retries")
 
 def get_db():
     return psycopg2.connect(DATABASE_URL)
