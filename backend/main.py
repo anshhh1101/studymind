@@ -1,13 +1,13 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from google import genai
-from google.genai import types
 import psycopg2
 import json
 import numpy as np
 import pdfplumber
 import tempfile
 import os
+import requests
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,10 +22,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GEMINI_KEY = os.getenv("GEMINI_KEY")
+HF_KEY = os.getenv("HF_KEY")
+GROQ_KEY = os.getenv("GROQ_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-client = genai.Client(api_key=GEMINI_KEY)
+groq_client = Groq(api_key=GROQ_KEY)
+
+HF_EMBED_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
+HF_HEADERS = {"Authorization": f"Bearer {HF_KEY}"}
+
+def get_embedding(text: str):
+    response = requests.post(
+        HF_EMBED_URL,
+        headers=HF_HEADERS,
+        json={"inputs": text, "options": {"wait_for_model": True}}
+    )
+    result = response.json()
+    if isinstance(result, list) and isinstance(result[0], float):
+        return result
+    if isinstance(result, list) and isinstance(result[0], list):
+        return result[0]
+    raise ValueError(f"Unexpected embedding response: {result}")
 
 def get_db():
     return psycopg2.connect(DATABASE_URL)
@@ -77,13 +94,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     cur.execute("DELETE FROM documents")
 
     for chunk in chunks:
-        result = client.models.embed_content(
-            model="gemini-embedding-001",
-            contents=chunk,
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
-        )
-        embedding = result.embeddings[0].values
-
+        embedding = get_embedding(chunk)
         cur.execute(
             "INSERT INTO documents (chunk_text, embedding) VALUES (%s, %s)",
             (chunk, json.dumps(embedding))
@@ -106,12 +117,7 @@ async def ask_question(data: dict):
     if not question:
         return {"answer": "Please ask a valid question."}
 
-    result = client.models.embed_content(
-        model="gemini-embedding-001",
-        contents=question,
-        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
-    )
-    question_embedding = np.array(result.embeddings[0].values)
+    question_embedding = np.array(get_embedding(question))
 
     conn = get_db()
     cur = conn.cursor()
@@ -151,12 +157,12 @@ Question:
 
 Answer clearly and concisely."""
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
+    response = groq_client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[{"role": "user", "content": prompt}]
     )
 
-    return {"answer": response.text}
+    return {"answer": response.choices[0].message.content}
 
 
 # -----------------------------
