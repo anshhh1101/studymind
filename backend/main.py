@@ -70,6 +70,9 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     os.unlink(tmp_path)
 
+    if not full_text.strip():
+        return {"message": "Could not extract text from PDF. Make sure it is not a scanned image."}
+
     words = full_text.split()
     chunk_size = 500
     chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
@@ -80,8 +83,9 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     for chunk in chunks:
         result = genai.embed_content(
-            model="models/text-embedding-004",
-            content=chunk
+            model="models/embedding-001",
+            content=chunk,
+            task_type="retrieval_document"
         )
         embedding = result["embedding"]
 
@@ -103,11 +107,15 @@ async def upload_pdf(file: UploadFile = File(...)):
 @app.post("/ask")
 async def ask_question(data: dict):
 
-    question = data["question"]
+    question = data.get("question", "").strip()
+
+    if not question:
+        return {"answer": "Please ask a valid question."}
 
     result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=question
+        model="models/embedding-001",
+        content=question,
+        task_type="retrieval_query"
     )
     question_embedding = np.array(result["embedding"])
 
@@ -125,6 +133,7 @@ async def ask_question(data: dict):
     best_chunk = ""
 
     for chunk_text, embedding_json in rows:
+        # safely handle both string and list from psycopg2
         if isinstance(embedding_json, str):
             embedding_json = json.loads(embedding_json)
         chunk_embedding = np.array(embedding_json)
@@ -137,8 +146,7 @@ async def ask_question(data: dict):
             best_score = similarity
             best_chunk = chunk_text
 
-    prompt = f"""
-You are a helpful teaching assistant.
+    prompt = f"""You are a helpful teaching assistant.
 
 Answer the question based ONLY on the context below.
 
@@ -148,8 +156,7 @@ Context:
 Question:
 {question}
 
-Answer clearly and concisely.
-"""
+Answer clearly and concisely."""
 
     model = genai.GenerativeModel("gemini-2.0-flash")
     response = model.generate_content(prompt)
