@@ -7,6 +7,7 @@ import pdfplumber
 import tempfile
 import os
 import requests
+import time
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -32,17 +33,30 @@ HF_EMBED_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction
 HF_HEADERS = {"Authorization": f"Bearer {HF_KEY}"}
 
 def get_embedding(text: str):
-    response = requests.post(
-        HF_EMBED_URL,
-        headers=HF_HEADERS,
-        json={"inputs": text, "options": {"wait_for_model": True}}
-    )
-    result = response.json()
-    if isinstance(result, list) and isinstance(result[0], float):
-        return result
-    if isinstance(result, list) and isinstance(result[0], list):
-        return result[0]
-    raise ValueError(f"Unexpected embedding response: {result}")
+    max_retries = 5
+    for attempt in range(max_retries):
+        response = requests.post(
+            HF_EMBED_URL,
+            headers=HF_HEADERS,
+            json={"inputs": text, "options": {"wait_for_model": True}},
+            timeout=60
+        )
+
+        if response.status_code == 503 or not response.text.strip():
+            time.sleep(10)
+            continue
+
+        result = response.json()
+
+        if isinstance(result, list) and len(result) > 0:
+            if isinstance(result[0], float):
+                return result
+            if isinstance(result[0], list):
+                return result[0]
+
+        time.sleep(5)
+
+    raise ValueError("HuggingFace model failed to respond after retries")
 
 def get_db():
     return psycopg2.connect(DATABASE_URL)
