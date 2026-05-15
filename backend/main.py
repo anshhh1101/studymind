@@ -35,26 +35,35 @@ HF_HEADERS = {"Authorization": f"Bearer {HF_KEY}"}
 def get_embedding(text: str):
     max_retries = 5
     for attempt in range(max_retries):
-        response = requests.post(
-            HF_EMBED_URL,
-            headers=HF_HEADERS,
-            json={"inputs": text, "options": {"wait_for_model": True}},
-            timeout=60
-        )
+        try:
+            response = requests.post(
+                HF_EMBED_URL,
+                headers=HF_HEADERS,
+                json={"inputs": text, "options": {"wait_for_model": True}},
+                timeout=60
+            )
 
-        if response.status_code == 503 or not response.text.strip():
+            if not response.text.strip():
+                time.sleep(10)
+                continue
+
+            if response.status_code == 503:
+                time.sleep(10)
+                continue
+
+            result = response.json()
+
+            if isinstance(result, list) and len(result) > 0:
+                if isinstance(result[0], float):
+                    return result
+                if isinstance(result[0], list) and len(result[0]) > 0:
+                    return result[0]
+
+            time.sleep(5)
+
+        except Exception:
             time.sleep(10)
             continue
-
-        result = response.json()
-
-        if isinstance(result, list) and len(result) > 0:
-            if isinstance(result[0], float):
-                return result
-            if isinstance(result[0], list):
-                return result[0]
-
-        time.sleep(5)
 
     raise ValueError("HuggingFace model failed to respond after retries")
 
